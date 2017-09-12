@@ -126,6 +126,9 @@ export class Downloader {
 		}
 
 		return new Promise((resolve, reject) => {
+			let totalBytes = 0;
+			let receivedBytes = 0;
+
 			this.log.v(`Downloading ${url}...`);
 			request.get(url)
 				.on("response", (response: request.RequestResponse) => {
@@ -134,6 +137,8 @@ export class Downloader {
 						reject("No binary data returned.");
 						return;
 					}
+					totalBytes = parseInt(<string>response.headers["content-length"], 10);
+					this.showProgress(totalBytes, receivedBytes);
 
 					response.on("end", () => this.log.v("Finished downloading."));
 					response.pipe(fs.createWriteStream(saveFileName))
@@ -143,8 +148,17 @@ export class Downloader {
 							return;
 						});
 				})
+				.on("data", (chunk) => {
+					receivedBytes += chunk.length;
+					this.showProgress(totalBytes, receivedBytes);
+				})
 				.on("error", reject);
 		});
 	}
 
+	showProgress(total: number, received: number) {
+		var percentage = ((received * 100) / total).toFixed(2);
+		process.stdout.write((os.platform() == "win32") ? "\x1B[0G" : "\r");
+		process.stdout.write(percentage + "% | " + received + " / " + total + " bytes.");
+	}
 }
