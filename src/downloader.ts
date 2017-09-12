@@ -22,42 +22,41 @@ export class Downloader {
 	constructor(private api: PleerApi, private log: ILogger) {
 	}
 
-	public start(mode: Mode) {
+	public async start(mode: Mode) {
 
 		this.log.i("Downloading list of playlists...");
-		let playlist = this.api.getAllPlaylists()
-			.then(this.selectPlaylist);
+		let allPlaylists = await this.api.getAllPlaylists();
+		let selectedPlaylist = await this.selectPlaylist(allPlaylists);
 
 
 		switch (mode) {
 			case Mode.CreateScript:
 				{
-					playlist.then(async (playlist) => {
-						let baseDir = path.join(__dirname, playlist.title)
-						fs.mkdirSync(baseDir);
-						let scriptPath = path.join(baseDir, "script.sh");
-						let script = fs.createWriteStream(scriptPath, { mode: 0o755 });
+					let baseDir = path.join(__dirname, selectedPlaylist.title)
+					fs.mkdirSync(baseDir);
+					let scriptPath = path.join(baseDir, "script.sh");
+					let script = fs.createWriteStream(scriptPath, { mode: 0o755 });
 
-						await this.iterateTracks(playlist, (url: string, fileName: string) => {
-							return new Promise((resolve, reject) => {
-								script.write(`curl -L -o "${fileName}" -f ${url}\n`, (err: any) => {
-									if (err) return reject(err);
-									resolve();
-								});
+					await this.iterateTracks(selectedPlaylist, (url: string, fileName: string) => {
+						return new Promise((resolve, reject) => {
+							script.write(`curl -L -o "${fileName}" -f ${url}\n`, (err: any) => {
+								if (err) return reject(err);
+								resolve();
 							});
 						});
-
-						script.end();
-						script.close();
-
 					});
+
+					script.end();
+					script.close();
 				}
 				break;
-			case Mode.Download: {
-				playlist.then((playlist) => {
-					this.iterateTracks(playlist, this.downloadTrack);
-				});
-			}
+			case Mode.Download:
+				{
+					let baseDir = path.join(__dirname, selectedPlaylist.title)
+					fs.mkdirSync(baseDir);
+					console.log(baseDir);
+					this.iterateTracks(selectedPlaylist, (u, f, p, t) => this.downloadTrack(u, f, p, t));
+				}
 				break;
 		}
 	}
@@ -131,10 +130,11 @@ export class Downloader {
 			request.get(url)
 				.on("response", (response: request.RequestResponse) => {
 					this.log.v(`Got ${response.statusCode} ${response.headers["content-type"]}`);
-					if (response.headers["content-type"].toString().startsWith("text")) {
+					if (response.headers["content-type"] != "application/octet-stream") {
 						reject("No binary data returned.");
 						return;
 					}
+
 					response.on("end", () => this.log.v("Finished downloading."));
 					response.pipe(fs.createWriteStream(saveFileName))
 						.on("finish", () => {
