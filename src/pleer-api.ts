@@ -1,4 +1,5 @@
 import * as request from "request";
+//import * as fs from "fs";
 
 export interface IResponse {
     result: boolean;
@@ -46,10 +47,10 @@ export class PleerApi {
                     }
 
                     //console.info(`Got response ${response.statusCode}`);
+                    //fs.writeFileSync("playlists.json", body);
 
                     let playlists: IPlaylists = JSON.parse(body);
                     if (playlists.result && playlists.success) {
-                        //fs.writeFileSync("playlists.json", body);
                         resolve(playlists.playlists);
                     } else {
                         reject(playlists);

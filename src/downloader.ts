@@ -28,12 +28,13 @@ export class Downloader {
 		let allPlaylists = await this.api.getAllPlaylists();
 		let selectedPlaylist = await this.selectPlaylist(allPlaylists);
 
+		let baseDir = path.join(__dirname, selectedPlaylist.title)
+		if (!fs.existsSync(baseDir))
+			fs.mkdirSync(baseDir);
 
 		switch (mode) {
 			case Mode.CreateScript:
 				{
-					let baseDir = path.join(__dirname, selectedPlaylist.title)
-					fs.mkdirSync(baseDir);
 					let scriptPath = path.join(baseDir, "script.sh");
 					let script = fs.createWriteStream(scriptPath, { mode: 0o755 });
 
@@ -52,9 +53,6 @@ export class Downloader {
 				break;
 			case Mode.Download:
 				{
-					let baseDir = path.join(__dirname, selectedPlaylist.title)
-					fs.mkdirSync(baseDir);
-					console.log(baseDir);
 					this.iterateTracks(selectedPlaylist, (u, f, p, t) => this.downloadTrack(u, f, p, t));
 				}
 				break;
@@ -133,13 +131,15 @@ export class Downloader {
 			request.get(url)
 				.on("response", (response: request.RequestResponse) => {
 					this.log.v(`Got ${response.statusCode} ${response.headers["content-type"]}`);
+					
 					if (response.headers["content-type"] != "application/octet-stream") {
 						reject("No binary data returned.");
 						return;
 					}
+
 					totalBytes = parseInt(<string>response.headers["content-length"], 10);
 					this.showProgress(totalBytes, receivedBytes);
-
+					
 					response.on("end", () => this.log.v("Finished downloading."));
 					response.pipe(fs.createWriteStream(saveFileName))
 						.on("finish", () => {
@@ -157,6 +157,7 @@ export class Downloader {
 	}
 
 	showProgress(total: number, received: number) {
+		if (total === 0) return;
 		var percentage = ((received * 100) / total).toFixed(2);
 		process.stdout.write((os.platform() == "win32") ? "\x1B[0G" : "\r");
 		process.stdout.write(percentage + "% | " + received + " / " + total + " bytes.");
